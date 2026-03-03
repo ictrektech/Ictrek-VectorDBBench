@@ -277,6 +277,32 @@ class IVFRABITQConfig(IVFSQ8Config):
         }
 
 
+class PIPEANNConfig(MilvusIndexConfig, DBCaseConfig):
+    """PipeANN index configuration for Milvus"""
+    max_nbrs: int = 64           # R parameter: maximum out-degree
+    build_L: int = 100           # Build-time search list size
+    search_L: int | None = None  # Search-time list size
+    PQ_bytes: int = 32           # Product quantization bytes
+    index: IndexType = IndexType.PIPEANN
+
+    def index_param(self) -> dict:
+        return {
+            "metric_type": self.parse_metric(),
+            "index_type": self.index.value,
+            "params": {
+                "max_nbrs": self.max_nbrs,
+                "build_L": self.build_L,
+                "PQ_bytes": self.PQ_bytes,
+            },
+        }
+
+    def search_param(self) -> dict:
+        return {
+            "metric_type": self.parse_metric(),
+            "params": {"search_L": self.search_L},
+        }
+
+
 class FLATConfig(MilvusIndexConfig, DBCaseConfig):
     index: IndexType = IndexType.Flat
 
@@ -441,6 +467,50 @@ class SCANNConfig(MilvusIndexConfig, DBCaseConfig):
         }
 
 
+class ODINANNConfig(MilvusIndexConfig, DBCaseConfig):
+    """OdinANN index configuration for Milvus
+    
+    OdinANN is a disk-based vector index similar to DiskANN.
+    Key parameters:
+    - max_degree: Maximum out-degree of each node in the graph (R parameter)
+    - search_list_size: Size of candidate list during search
+    - pq_code_size: Bytes for PQ compression (0 = no compression)
+    - pq_m: Number of sub-quantizers for PQ (0 = auto-calculate)
+    - beamwidth: Number of beams for beam search
+    """
+    max_degree: int = 56
+    search_list_size: int = 128
+    pq_code_size: int = 0  # 0 means no PQ compression
+    pq_m: int = 0  # 0 means auto-calculate based on data
+    beamwidth: int = 8
+    use_partition_key: bool = False
+    insert_batch_size: int | None = 5000  # Default batch size for OdinANN insertions
+    disable_growing_segments: bool = True  # Disable growing segments for OdinANN
+    index: IndexType = IndexType.ODINANN
+
+    def index_param(self) -> dict:
+        return {
+            "metric_type": self.parse_metric(),
+            "index_type": self.index.value,
+            "params": {
+                "max_degree": self.max_degree,
+                "search_list_size": self.search_list_size,
+                "pq_code_size": self.pq_code_size,
+                "pq_m": self.pq_m,
+                "beamwidth": self.beamwidth,
+            },
+        }
+
+    def search_param(self) -> dict:
+        return {
+            "metric_type": self.parse_metric(),
+            "params": {
+                "search_list_size": self.search_list_size,
+                "beamwidth": self.beamwidth,
+            },
+        }
+
+
 _milvus_case_config = {
     IndexType.AUTOINDEX: AutoIndexConfig,
     IndexType.HNSW: HNSWConfig,
@@ -458,4 +528,6 @@ _milvus_case_config = {
     IndexType.GPU_CAGRA: GPUCAGRAConfig,
     IndexType.GPU_BRUTE_FORCE: GPUBruteForceConfig,
     IndexType.SCANN_MILVUS: SCANNConfig,
+    IndexType.PIPEANN: PIPEANNConfig,
+    IndexType.ODINANN: ODINANNConfig,
 }

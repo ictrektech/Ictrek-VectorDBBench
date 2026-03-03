@@ -24,6 +24,8 @@ class IndexType(str, Enum):
     HNSW_PRQ = "HNSW_PRQ"
     DISKANN = "DISKANN"
     STREAMING_DISKANN = "DISKANN"
+    PIPEANN = "PIPEANN"
+    ODINANN = "ODINANN"
     IVFFlat = "IVF_FLAT"
     IVFPQ = "IVF_PQ"
     IVFSQ8 = "IVF_SQ8"

@@ -565,3 +565,121 @@ def MilvusGPUCAGRA(**parameters: Unpack[MilvusGPUCAGRATypedDict]):
         ),
         **parameters,
     )
+
+
+class MilvusODINANNTypedDict(CommonTypedDict, MilvusTypedDict):
+    """OdinANN index configuration for Milvus
+    
+    OdinANN is a disk-based vector index similar to DiskANN.
+    Key parameters:
+    - max_degree: Maximum out-degree of each node in the graph (R parameter)
+    - search_list_size: Size of candidate list during search
+    - pq_code_size: Bytes for PQ compression (0 = no compression)
+    - pq_m: Number of sub-quantizers for PQ (0 = auto-calculate)
+    - beamwidth: Number of beams for beam search
+    """
+    max_degree: Annotated[
+        int,
+        click.option("--max-degree", type=int, required=True, help="Maximum degree of the graph (R parameter)", default=56),
+    ]
+    search_list_size: Annotated[
+        int,
+        click.option("--search-list-size", type=int, required=True, help="Size of search list during search", default=128),
+    ]
+    pq_code_size: Annotated[
+        int,
+        click.option("--pq-code-size", type=int, required=False, help="Bytes for PQ compression (0 = no compression)", default=0),
+    ]
+    pq_m: Annotated[
+        int,
+        click.option("--pq-m", type=int, required=False, help="Number of sub-quantizers for PQ (0 = auto-calculate)", default=0),
+    ]
+    beamwidth: Annotated[
+        int,
+        click.option("--beamwidth", type=int, required=False, help="Number of beams for beam search", default=8),
+    ]
+    use_partition_key: Annotated[
+        bool,
+        click.option("--use-partition-key", type=bool, required=False, help="Whether to use partition key", default=False),
+    ]
+    insert_batch_size: Annotated[
+        int,
+        click.option("--insert-batch-size", type=int, required=False, help="Batch size for insertions", default=5000),
+    ]
+    disable_growing_segments: Annotated[
+        bool,
+        click.option("--disable-growing-segments", type=bool, required=False, help="Disable growing segments for OdinANN", default=True),
+    ]
+
+
+@cli.command()
+@click_parameter_decorators_from_typed_dict(MilvusODINANNTypedDict)
+def MilvusODINANN(**parameters: Unpack[MilvusODINANNTypedDict]):
+    from .config import ODINANNConfig, MilvusConfig
+
+    run(
+        db=DBTYPE,
+        db_config=MilvusConfig(
+            db_label=parameters["db_label"],
+            uri=SecretStr(parameters["uri"]),
+            user=parameters["user_name"],
+            password=SecretStr(parameters["password"]) if parameters["password"] else None,
+            num_shards=int(parameters["num_shards"]),
+            replica_number=int(parameters["replica_number"]),
+        ),
+        db_case_config=ODINANNConfig(
+            max_degree=parameters["max_degree"],
+            search_list_size=parameters["search_list_size"],
+            pq_code_size=parameters.get("pq_code_size", 0),
+            pq_m=parameters.get("pq_m", 0),
+            beamwidth=parameters.get("beamwidth", 8),
+            use_partition_key=parameters.get("use_partition_key", False),
+            insert_batch_size=parameters.get("insert_batch_size", 5000),
+            disable_growing_segments=parameters.get("disable_growing_segments", True),
+        ),
+        **parameters,
+    )
+
+
+class MilvusPIPEANNTypedDict(CommonTypedDict, MilvusTypedDict):
+    max_nbrs: Annotated[
+        int,
+        click.option("--max-nbrs", type=int, required=True, help="Maximum number of neighbors", default=64),
+    ]
+    build_L: Annotated[
+        int,
+        click.option("--build-L", type=int, required=True, help="Build L parameter", default=100),
+    ]
+    search_L: Annotated[
+        int,
+        click.option("--search-L", type=int, required=True, help="Search L parameter", default=100),
+    ]
+    PQ_bytes: Annotated[
+        int,
+        click.option("--PQ-bytes", type=int, required=True, help="Product quantization bytes", default=32),
+    ]
+
+
+@cli.command()
+@click_parameter_decorators_from_typed_dict(MilvusPIPEANNTypedDict)
+def MilvusPIPEANN(**parameters: Unpack[MilvusPIPEANNTypedDict]):
+    from .config import PIPEANNConfig, MilvusConfig
+
+    run(
+        db=DBTYPE,
+        db_config=MilvusConfig(
+            db_label=parameters["db_label"],
+            uri=SecretStr(parameters["uri"]),
+            user=parameters["user_name"],
+            password=SecretStr(parameters["password"]) if parameters["password"] else None,
+            num_shards=int(parameters["num_shards"]),
+            replica_number=int(parameters["replica_number"]),
+        ),
+        db_case_config=PIPEANNConfig(
+            max_nbrs=parameters["max_nbrs"],
+            build_L=parameters["build_L"],
+            search_L=parameters["search_L"],
+            PQ_bytes=parameters["PQ_bytes"],
+        ),
+        **parameters,
+    )

@@ -137,6 +137,17 @@ class CaseConfigParamType(Enum):
     confidence_interval = "confidence_interval"
     clip = "clip"
 
+    # OdinANN parameters
+    max_degree = "max_degree"
+    pq_code_size = "pq_code_size"
+    pq_m = "pq_m"
+    beamwidth = "beamwidth"
+    insert_batch_size = "insert_batch_size"
+    disable_growing_segments = "disable_growing_segments"
+
+    # PipeANN parameters
+    max_nbrs = "max_nbrs"
+
     # OceanBase IVF parameters
     sample_per_nlist = "sample_per_nlist"
     ivf_nprobes = "ivf_nprobes"

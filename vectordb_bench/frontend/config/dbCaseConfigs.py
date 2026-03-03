@@ -413,6 +413,8 @@ CaseConfigParamInput_IndexType = CaseConfigInput(
             IndexType.IVF_RABITQ.value,
             IndexType.SCANN_MILVUS.value,
             IndexType.DISKANN.value,
+            IndexType.PIPEANN.value,
+            IndexType.ODINANN.value,
             IndexType.Flat.value,
             IndexType.AUTOINDEX.value,
             IndexType.GPU_IVF_FLAT.value,
@@ -1085,6 +1087,110 @@ CaseConfigParamInput_SearchList = CaseConfigInput(
         "value": 100,
     },
     isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.DISKANN.value,
+)
+
+
+CaseConfigParamInput_MaxDegree = CaseConfigInput(
+    label=CaseConfigParamType.max_degree,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 1,
+        "max": 2048,
+        "value": 56,
+    },
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+)
+
+
+CaseConfigParamInput_SearchListSize = CaseConfigInput(
+    label=CaseConfigParamType.search_list_size,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 10,
+        "max": 1000,
+        "value": 128,
+    },
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+)
+
+
+CaseConfigParamInput_PQCodeSize = CaseConfigInput(
+    label=CaseConfigParamType.pq_code_size,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 0,
+        "max": 256,
+        "value": 0,
+    },
+    displayLabel="PQ Code Size",
+    inputHelp="Bytes for PQ compression (0 = no compression)",
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+)
+
+
+CaseConfigParamInput_PQM = CaseConfigInput(
+    label=CaseConfigParamType.pq_m,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 0,
+        "max": 256,
+        "value": 0,
+    },
+    displayLabel="PQ M",
+    inputHelp="Number of sub-quantizers for PQ (0 = auto-calculate)",
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+)
+
+
+CaseConfigParamInput_Beamwidth = CaseConfigInput(
+    label=CaseConfigParamType.beamwidth,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 1,
+        "max": 64,
+        "value": 8,
+    },
+    displayLabel="Beamwidth",
+    inputHelp="Number of beams for beam search",
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+)
+
+
+CaseConfigParamInput_InsertBatchSize = CaseConfigInput(
+    label=CaseConfigParamType.insert_batch_size,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 1,
+        "max": 100000,
+        "value": 5000,
+    },
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+    displayLabel="Insert Batch Size",
+    inputHelp="Batch size for insertions in OdinANN (default: 5000)",
+)
+
+
+CaseConfigParamInput_DisableGrowingSegments = CaseConfigInput(
+    label=CaseConfigParamType.disable_growing_segments,
+    inputType=InputType.Option,
+    inputConfig={
+        "options": [False, True],
+    },
+    displayLabel="Disable Growing Segments",
+    inputHelp="Disable growing segments for OdinANN",
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.ODINANN.value,
+)
+
+
+CaseConfigParamInput_MaxNbrs = CaseConfigInput(
+    label=CaseConfigParamType.max_nbrs,
+    inputType=InputType.Number,
+    inputConfig={
+        "min": 1,
+        "max": 256,
+        "value": 64,
+    },
+    isDisplayed=lambda config: config.get(CaseConfigParamType.IndexType, None) == IndexType.PIPEANN.value,
 )
 
 CaseConfigParamInput_Nlist = CaseConfigInput(
@@ -2123,6 +2229,14 @@ MilvusLoadConfig = [
     CaseConfigParamInput_IndexType,
     CaseConfigParamInput_M,
     CaseConfigParamInput_EFConstruction_Milvus,
+    CaseConfigParamInput_MaxDegree,
+    CaseConfigParamInput_SearchListSize,
+    CaseConfigParamInput_PQCodeSize,
+    CaseConfigParamInput_PQM,
+    CaseConfigParamInput_Beamwidth,
+    CaseConfigParamInput_InsertBatchSize,
+    CaseConfigParamInput_DisableGrowingSegments,
+    CaseConfigParamInput_MaxNbrs,
     CaseConfigParamInput_Nlist,
     CaseConfigParamInput_with_raw_data,
     CaseConfigParamInput_M_PQ,
@@ -2142,7 +2256,14 @@ MilvusPerformanceConfig = [
     CaseConfigParamInput_M,
     CaseConfigParamInput_EFConstruction_Milvus,
     CaseConfigParamInput_EF_Milvus,
-    CaseConfigParamInput_SearchList,
+    CaseConfigParamInput_MaxDegree,
+    CaseConfigParamInput_SearchListSize,
+    CaseConfigParamInput_PQCodeSize,
+    CaseConfigParamInput_PQM,
+    CaseConfigParamInput_Beamwidth,
+    CaseConfigParamInput_InsertBatchSize,
+    CaseConfigParamInput_DisableGrowingSegments,
+    CaseConfigParamInput_MaxNbrs,
     CaseConfigParamInput_Nlist,
     CaseConfigParamInput_with_raw_data,
     CaseConfigParamInput_reorder_k,

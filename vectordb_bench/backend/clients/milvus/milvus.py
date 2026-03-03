@@ -9,7 +9,7 @@ from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, Milvus
 
 from vectordb_bench.backend.filter import Filter, FilterOp
 
-from ..api import VectorDB
+from ..api import VectorDB, IndexType
 from .config import MilvusIndexConfig
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,22 @@ class Milvus(VectorDB):
         self.db_config = db_config
         self.case_config = db_case_config
         self.collection_name = collection_name
-        self.batch_size = int(MILVUS_LOAD_REQS_SIZE / (dim * 4))
+        
+        # Calculate default batch size based on memory constraint
+        default_batch_size = int(MILVUS_LOAD_REQS_SIZE / (dim * 4))
+        
+        # Allow configurable batch size for specific index types (especially OdinANN)
+        # First priority: explicit insert_batch_size from config
+        if hasattr(db_case_config, 'insert_batch_size') and db_case_config.insert_batch_size is not None:
+            self.batch_size = db_case_config.insert_batch_size
+        # Second priority: OdinANN default
+        elif db_case_config.index == IndexType.ODINANN:
+            # Default batch size for OdinANN
+            self.batch_size = kwargs.get('odinann_batch_size', 5000)
+        # Fallback: calculated based on memory constraint
+        else:
+            self.batch_size = default_batch_size
+            
         self.with_scalar_labels = with_scalar_labels
 
         self._primary_field = "pk"
@@ -91,8 +106,26 @@ class Milvus(VectorDB):
                 num_shards=self.db_config.get("num_shards", 1),
             )
 
-            self.create_index()
-            col.load(replica_number=self.db_config.get("replica_number", 1))
+            # For OdinANN, we create the collection but delay index creation until after data is flushed
+            if db_case_config.index == IndexType.ODINANN:
+                # Check if growing segments should be disabled (which is the default for OdinANN)
+                disable_growing = getattr(db_case_config, 'disable_growing_segments', True)
+                if disable_growing:
+                    log.info(f"{self.name} OdinANN detected with growing segments disabled - skipping initial index creation, will create index after data insertion and flush")
+                    # Just release collection if it was loaded by default
+                    try:
+                        col.release()
+                    except:
+                        pass  # Collection might not be loaded yet
+                else:
+                    # Growing segments enabled, proceed with normal flow
+                    log.info(f"{self.name} OdinANN detected with growing segments enabled - proceeding with normal index creation")
+                    self.create_index()
+                    col.load(replica_number=self.db_config.get("replica_number", 1))
+            else:
+                # For other indexes, create index and load immediately as before
+                self.create_index()
+                col.load(replica_number=self.db_config.get("replica_number", 1))
 
         connections.disconnect("default")
 
@@ -145,7 +178,18 @@ class Milvus(VectorDB):
         log.info(f"{self.name} optimizing before search")
         self._post_insert()
         try:
-            self.col.load(refresh=True)
+            # For OdinANN, ensure the collection is loaded after index is built
+            if self.case_config.index == IndexType.ODINANN:
+                # Check if growing segments should be disabled (which is the default for OdinANN)
+                disable_growing = getattr(self.case_config, 'disable_growing_segments', True)
+                if disable_growing:
+                    log.info(f"{self.name} OdinANN detected with growing segments disabled - loading collection after index creation")
+                    self.col.load(replica_number=self.db_config.get("replica_number", 1))
+                else:
+                    log.info(f"{self.name} OdinANN detected with growing segments enabled - loading with refresh")
+                    self.col.load(refresh=True)
+            else:
+                self.col.load(refresh=True)
         except Exception as e:
             log.warning(f"{self.name} optimize error: {e}")
             raise e from None
@@ -153,36 +197,61 @@ class Milvus(VectorDB):
     def _post_insert(self):
         try:
             self.col.flush()
-            # wait for index done and load refresh
-            self.create_index()
-
-            utility.wait_for_index_building_complete(self.collection_name, index_name=self._vector_index_name)
-
-            def wait_index():
-                while True:
-                    progress = utility.index_building_progress(self.collection_name, index_name=self._vector_index_name)
-                    if progress.get("pending_index_rows", -1) == 0:
-                        break
-                    time.sleep(5)
-
-            wait_index()
-
-            # Skip compaction if use GPU indexType
-            if self.case_config.is_gpu_index:
-                log.debug("skip compaction for gpu index type.")
-            else:
+            
+            # For OdinANN, we need to create index after flushing all data
+            if self.case_config.index == IndexType.ODINANN:
+                log.info(f"{self.name} OdinANN detected - creating index after flush")
+                # Release collection first if it's loaded
                 try:
-                    self.col.compact()
-                    self.col.wait_for_compaction_completed()
-                    log.info("compactation completed. waiting for the rest of index buliding.")
-                except Exception as e:
-                    log.warning(f"{self.name} compact error: {e}")
-                    if hasattr(e, "code"):
-                        if e.code().name == "PERMISSION_DENIED":
-                            log.warning("Skip compact due to permission denied.")
-                    else:
-                        raise e from e
+                    self.col.release()
+                except:
+                    pass  # Might not be loaded yet
+                
+                # Create the index after all data is flushed
+                self.create_index()
+                
+                # Wait for index building to complete
+                utility.wait_for_index_building_complete(self.collection_name, index_name=self._vector_index_name)
+
+                def wait_index():
+                    while True:
+                        progress = utility.index_building_progress(self.collection_name, index_name=self._vector_index_name)
+                        if progress.get("pending_index_rows", -1) == 0:
+                            break
+                        time.sleep(5)
+
                 wait_index()
+            else:
+                # wait for index done and load refresh
+                self.create_index()
+
+                utility.wait_for_index_building_complete(self.collection_name, index_name=self._vector_index_name)
+
+                def wait_index():
+                    while True:
+                        progress = utility.index_building_progress(self.collection_name, index_name=self._vector_index_name)
+                        if progress.get("pending_index_rows", -1) == 0:
+                            break
+                        time.sleep(5)
+
+                wait_index()
+
+                # Skip compaction if use GPU indexType
+                if self.case_config.is_gpu_index:
+                    log.debug("skip compaction for gpu index type.")
+                else:
+                    try:
+                        self.col.compact()
+                        self.col.wait_for_compaction_completed()
+                        log.info("compactation completed. waiting for the rest of index buliding.")
+                    except Exception as e:
+                        log.warning(f"{self.name} compact error: {e}")
+                        if hasattr(e, "code"):
+                            if e.code().name == "PERMISSION_DENIED":
+                                log.warning("Skip compact due to permission denied.")
+                        else:
+                            raise e from e
+                    wait_index()
         except Exception as e:
             log.warning(f"{self.name} optimize error: {e}")
             raise e from None
@@ -195,6 +264,11 @@ class Milvus(VectorDB):
         """Wheather this database need to normalize dataset to support COSINE"""
         if self.case_config.is_gpu_index:
             log.info("current gpu_index only supports IP / L2, cosine dataset need normalize.")
+            return True
+        
+        # Check if the index type is ODINANN or PIPEANN
+        if self.case_config.index in [IndexType.ODINANN, IndexType.PIPEANN]:
+            log.info("ODINANN and PIPEANN require cosine normalization for COSINE metric.")
             return True
 
         return False
@@ -215,9 +289,9 @@ class Milvus(VectorDB):
             for batch_start_offset in range(0, len(embeddings), self.batch_size):
                 batch_end_offset = min(batch_start_offset + self.batch_size, len(embeddings))
                 insert_data = [
-                    metadata[batch_start_offset:batch_end_offset],
-                    metadata[batch_start_offset:batch_end_offset],
-                    embeddings[batch_start_offset:batch_end_offset],
+                    metadata[batch_start_offset:batch_end_offset],  # pk (primary key) - use explicit IDs
+                    metadata[batch_start_offset:batch_end_offset],  # scalar id - use same IDs for consistency
+                    embeddings[batch_start_offset:batch_end_offset],  # vector
                 ]
                 if self.with_scalar_labels:
                     insert_data.append(labels_data[batch_start_offset:batch_end_offset])
